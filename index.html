@@ -8,155 +8,459 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.22.9/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .code-container {
+      background: #1a1a1a;
+      color: #f8f8f2;
+      font-family: 'Courier New', monospace;
+    }
+    .highlight {
+      background: rgba(255, 255, 0, 0.2);
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useRef } = React;
 
     const App = () => {
       const [xmlInput, setXmlInput] = useState('');
       const [generatedCode, setGeneratedCode] = useState('');
       const [error, setError] = useState('');
+      const [testName, setTestName] = useState('SOAP API Test');
+      const [extractedInfo, setExtractedInfo] = useState(null);
+      const [isLoading, setIsLoading] = useState(false);
+      const fileInputRef = useRef(null);
 
-      const parseSoapUIXml = (xmlString) => {
+      const extractSoapUIInfo = (xmlString) => {
         try {
           const parser = new DOMParser();
           const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-          if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-            throw new Error('Invalid XML format');
+          
+          // Check for parser errors
+          const parserErrors = xmlDoc.getElementsByTagName('parsererror');
+          if (parserErrors.length > 0) {
+            throw new Error('Invalid XML format: ' + parserErrors[0].textContent);
           }
 
-          const requestNode = xmlDoc.getElementsByTagName('con:request')[0] || xmlDoc.getElementsByTagName('soap:Envelope')[0];
-          if (!requestNode) {
-            throw new Error('No SOAP request found in XML');
-          }
-
-          const endpoint = xmlDoc.getElementsByTagName('con:endpoint')[0]?.textContent || 'http://example.com/soap';
-          const method = 'POST'; // SOAP requests are typically POST
-          const headers = { 'Content-Type': 'text/xml; charset=utf-8' };
-          const soapActionNode = xmlDoc.getElementsByTagName('con:settings')[0]?.getElementsByTagName('con:setting');
+          let endpoint = '';
           let soapAction = '';
-          if (soapActionNode) {
-            for (let node of soapActionNode) {
-              if (node.getAttribute('id') === 'com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers') {
-                soapAction = node.textContent.match(/SOAPAction="([^"]+)"/)?.[1] || '';
-                if (soapAction) headers['SOAPAction'] = soapAction;
+          let requestBody = '';
+          let method = 'POST';
+          let headers = {
+            'Content-Type': 'text/xml; charset=utf-8'
+          };
+
+          // Try to find endpoint from different possible locations
+          const endpointElements = [
+            ...xmlDoc.getElementsByTagName('con:endpoint'),
+            ...xmlDoc.getElementsByTagName('endpoint'),
+            ...xmlDoc.querySelectorAll('[name="Endpoint"]')
+          ];
+          
+          if (endpointElements.length > 0) {
+            endpoint = endpointElements[0].textContent || endpointElements[0].getAttribute('value') || '';
+          }
+
+          // Extract SOAP Action
+          const soapActionElements = [
+            ...xmlDoc.querySelectorAll('[name="SOAPAction"]'),
+            ...xmlDoc.getElementsByTagName('con:soapAction'),
+            ...xmlDoc.getElementsByTagName('soapAction')
+          ];
+          
+          if (soapActionElements.length > 0) {
+            soapAction = soapActionElements[0].textContent || soapActionElements[0].getAttribute('value') || '';
+            if (soapAction) {
+              headers['SOAPAction'] = soapAction.replace(/"/g, '');
+            }
+          }
+
+          // Try to extract SOAP request body from various possible locations
+          const requestElements = [
+            ...xmlDoc.getElementsByTagName('con:request'),
+            ...xmlDoc.getElementsByTagName('request'),
+            ...xmlDoc.getElementsByTagName('soap:Envelope'),
+            ...xmlDoc.getElementsByTagName('soapenv:Envelope'),
+            ...xmlDoc.getElementsByTagName('Envelope')
+          ];
+
+          if (requestElements.length > 0) {
+            const requestElement = requestElements[0];
+            
+            // If it's a SOAP envelope directly, use it
+            if (requestElement.tagName.includes('Envelope')) {
+              requestBody = new XMLSerializer().serializeToString(requestElement);
+            } else {
+              // Otherwise, try to get the inner XML content
+              requestBody = requestElement.textContent || requestElement.innerHTML || '';
+              
+              // If the content looks like XML, clean it up
+              if (requestBody.includes('<') && requestBody.includes('>')) {
+                try {
+                  const innerDoc = parser.parseFromString(requestBody, 'text/xml');
+                  if (innerDoc.getElementsByTagName('parsererror').length === 0) {
+                    requestBody = new XMLSerializer().serializeToString(innerDoc.documentElement);
+                  }
+                } catch (e) {
+                  // Keep original if parsing fails
+                }
               }
             }
           }
 
-          const requestBody = new XMLSerializer().serializeToString(requestNode);
+          // Try to extract additional headers
+          const headerElements = xmlDoc.querySelectorAll('con:setting, setting');
+          headerElements.forEach(setting => {
+            const id = setting.getAttribute('id') || '';
+            if (id.includes('request-headers') || id.includes('headers')) {
+              const headerText = setting.textContent || setting.getAttribute('value') || '';
+              // Parse header string like "Authorization: Bearer token\nContent-Type: text/xml"
+              if (headerText) {
+                const headerLines = headerText.split('\n').filter(line => line.trim());
+                headerLines.forEach(line => {
+                  const [key, ...valueParts] = line.split(':');
+                  if (key && valueParts.length > 0) {
+                    const cleanKey = key.trim();
+                    const cleanValue = valueParts.join(':').trim();
+                    if (cleanKey && cleanValue) {
+                      headers[cleanKey] = cleanValue;
+                    }
+                  }
+                });
+              }
+            }
+          });
 
-          return { endpoint, method, headers, requestBody };
+          // If no endpoint found, try to extract from URL or other sources
+          if (!endpoint) {
+            const urlElements = xmlDoc.querySelectorAll('[*|href], [href], [url]');
+            if (urlElements.length > 0) {
+              endpoint = urlElements[0].getAttribute('href') || 
+                        urlElements[0].getAttribute('url') || 
+                        urlElements[0].textContent || '';
+            }
+          }
+
+          // Clean up the request body
+          if (requestBody) {
+            // Remove extra whitespace and format
+            requestBody = requestBody.trim();
+            // Remove XML declaration if present for cleaner output
+            requestBody = requestBody.replace(/<\?xml[^>]*\?>\s*/, '');
+          }
+
+          return {
+            endpoint: endpoint || 'https://example.com/soap-service',
+            method,
+            headers,
+            requestBody: requestBody || '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body></soap:Body></soap:Envelope>',
+            soapAction,
+            testName
+          };
+
         } catch (err) {
-          throw new Error(`Failed to parse XML: ${err.message}`);
+          throw new Error(`XML parsing failed: ${err.message}`);
         }
       };
 
-      const generatePlaywrightTest = ({ endpoint, method, headers, requestBody }) => {
-        // Escape XML namespaces by replacing double quotes with escaped double quotes
-        const escapedRequestBody = requestBody.replace(/"/g, '\\"');
-        return `
-const { test, expect } = require('@playwright/test');
+      const generatePlaywrightTest = (info) => {
+        const { endpoint, method, headers, requestBody, testName } = info;
+        
+        // Escape the request body for JavaScript template literal
+        const escapedBody = requestBody
+          .replace(/\\/g, '\\\\')
+          .replace(/`/g, '\\`')
+          .replace(/\$\{/g, '\\${');
 
-test('SOAP Request Test', async ({ request }) => {
-  const response = await request.${method.toLowerCase()}('${endpoint}', {
-    headers: ${JSON.stringify(headers, null, 2)},
-    data: \`${escapedRequestBody}\`
+        // Format headers for better readability
+        const formattedHeaders = JSON.stringify(headers, null, 4);
+
+        return `const { test, expect } = require('@playwright/test');
+
+test('${testName}', async ({ request }) => {
+  // SOAP service endpoint
+  const endpoint = '${endpoint}';
+  
+  // Request headers
+  const headers = ${formattedHeaders};
+  
+  // SOAP request body
+  const soapRequest = \`${escapedBody}\`;
+  
+  console.log('Sending SOAP request to:', endpoint);
+  console.log('Request body:', soapRequest);
+  
+  // Make the SOAP request
+  const response = await request.${method.toLowerCase()}(endpoint, {
+    headers: headers,
+    data: soapRequest
   });
-
-  // Assertions
-  await expect(response.status()).toBe(200);
+  
+  // Log response for debugging
+  console.log('Response status:', response.status());
   const responseBody = await response.text();
-  await expect(responseBody).toContain('soap:Envelope');
-  // Add more specific assertions based on expected response
-  // Example: await expect(responseBody).toMatch(/<specificElement>[^<]+<\/specificElement>/);
+  console.log('Response body:', responseBody);
+  
+  // Basic assertions
+  expect(response.status()).toBe(200);
+  
+  // Verify response contains SOAP envelope
+  expect(responseBody).toMatch(/<(?:soap:|soapenv:|)Envelope/);
+  
+  // Check for SOAP fault (error response)
+  expect(responseBody).not.toMatch(/<(?:soap:|soapenv:|)Fault/);
+  
+  // Additional custom assertions
+  // TODO: Add specific assertions based on your expected response
+  // Examples:
+  // expect(responseBody).toContain('expected-element-value');
+  // expect(responseBody).toMatch(/<YourResponseElement>.*<\/YourResponseElement>/);
+  
+  // Parse response XML if needed
+  // const parser = new DOMParser();
+  // const xmlDoc = parser.parseFromString(responseBody, 'text/xml');
+  // const resultElement = xmlDoc.getElementsByTagName('YourResultElement')[0];
+  // expect(resultElement?.textContent).toBe('expected-value');
 });
-        `.trim();
+
+// Optional: Test with different data variations
+test('${testName} - Error Handling', async ({ request }) => {
+  const endpoint = '${endpoint}';
+  const headers = ${formattedHeaders};
+  
+  // Test with invalid/empty request
+  const invalidRequest = \`<?xml version="1.0" encoding="utf-8"?>
+  <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap:Body>
+      <!-- Invalid or empty body for error testing -->
+    </soap:Body>
+  </soap:Envelope>\`;
+  
+  const response = await request.post(endpoint, {
+    headers: headers,
+    data: invalidRequest
+  });
+  
+  console.log('Error test response status:', response.status());
+  const responseBody = await response.text();
+  
+  // Depending on your API, you might expect 400, 500, or 200 with SOAP fault
+  expect([200, 400, 500]).toContain(response.status());
+  
+  if (response.status() === 200) {
+    // If status is 200, check for SOAP fault in response
+    expect(responseBody).toMatch(/<(?:soap:|soapenv:|)Fault/);
+  }
+});`.trim();
       };
 
-      const handleGenerate = () => {
+      const handleGenerate = async () => {
+        setIsLoading(true);
         setError('');
         setGeneratedCode('');
+        setExtractedInfo(null);
+        
         try {
           if (!xmlInput.trim()) {
-            setError('Please provide a valid SoapUI XML');
-            return;
+            throw new Error('Please provide SoapUI XML content');
           }
-          const parsedData = parseSoapUIXml(xmlInput);
-          const testCode = generatePlaywrightTest(parsedData);
+
+          const info = extractSoapUIInfo(xmlInput);
+          setExtractedInfo(info);
+          
+          const testCode = generatePlaywrightTest(info);
           setGeneratedCode(testCode);
+          
         } catch (err) {
           setError(err.message);
+        } finally {
+          setIsLoading(false);
         }
       };
 
       const handleFileUpload = (event) => {
         const file = event.target.files[0];
         if (file) {
+          if (!file.name.toLowerCase().endsWith('.xml')) {
+            setError('Please select an XML file');
+            return;
+          }
+          
           const reader = new FileReader();
           reader.onload = (e) => {
             setXmlInput(e.target.result);
             setError('');
           };
+          reader.onerror = () => {
+            setError('Failed to read file');
+          };
           reader.readAsText(file);
         }
       };
 
+      const copyToClipboard = async () => {
+        try {
+          await navigator.clipboard.writeText(generatedCode);
+          // Visual feedback could be added here
+        } catch (err) {
+          // Fallback for older browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = generatedCode;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+        }
+      };
+
+      const clearAll = () => {
+        setXmlInput('');
+        setGeneratedCode('');
+        setError('');
+        setExtractedInfo(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+
       return (
-        <div className="container mx-auto p-4 max-w-4xl">
-          <h1 className="text-2xl font-bold mb-4 text-center">SoapUI to Playwright Test Generator</h1>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload SoapUI XML or Paste Below
-            </label>
-            <input
-              type="file"
-              accept=".xml"
-              onChange={handleFileUpload}
-              className="mb-2 block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-full file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100"
-            />
-            <textarea
-              className="w-full h-40 p-2 border rounded-md"
-              placeholder="Paste your SoapUI XML here"
-              value={xmlInput}
-              onChange={(e) => setXmlInput(e.target.value)}
-            ></textarea>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <div className="text-center mb-8">
+              <h1 className="text-4xl font-bold text-gray-800 mb-2">
+                SoapUI → Playwright Converter
+              </h1>
+              <p className="text-gray-600">Convert your SoapUI XML requests to Playwright test code</p>
+            </div>
+            
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Input Section */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">Input</h2>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Test Name
+                  </label>
+                  <input
+                    type="text"
+                    value={testName}
+                    onChange={(e) => setTestName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter test name"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Upload SoapUI XML File
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xml"
+                    onChange={handleFileUpload}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-full file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-blue-50 file:text-blue-700
+                      hover:file:bg-blue-100 cursor-pointer"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Or Paste XML Content
+                  </label>
+                  <textarea
+                    className="w-full h-48 p-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Paste your SoapUI XML here..."
+                    value={xmlInput}
+                    onChange={(e) => setXmlInput(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isLoading || !xmlInput.trim()}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isLoading ? 'Generating...' : 'Generate Playwright Test'}
+                  </button>
+                  <button
+                    onClick={clearAll}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* Output Section */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-800">Generated Test</h2>
+                  {generatedCode && (
+                    <button
+                      onClick={copyToClipboard}
+                      className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      Copy Code
+                    </button>
+                  )}
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
+                    <strong>Error:</strong> {error}
+                  </div>
+                )}
+
+                {extractedInfo && (
+                  <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <h3 className="font-semibold text-blue-800 mb-2">Extracted Information:</h3>
+                    <div className="text-sm text-blue-700 space-y-1">
+                      <div><strong>Endpoint:</strong> {extractedInfo.endpoint}</div>
+                      <div><strong>Method:</strong> {extractedInfo.method}</div>
+                      <div><strong>SOAP Action:</strong> {extractedInfo.soapAction || 'None'}</div>
+                      <div><strong>Headers:</strong> {Object.keys(extractedInfo.headers).length} found</div>
+                    </div>
+                  </div>
+                )}
+
+                {generatedCode ? (
+                  <div className="code-container rounded-md p-4 overflow-auto max-h-96">
+                    <pre className="text-sm whitespace-pre-wrap">
+                      <code>{generatedCode}</code>
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-gray-500 border-2 border-dashed border-gray-300 rounded-md">
+                    Generated Playwright test will appear here
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {generatedCode && (
+              <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-lg font-semibold mb-3 text-gray-800">Usage Instructions</h3>
+                <div className="bg-gray-50 rounded-md p-4 text-sm">
+                  <ol className="list-decimal list-inside space-y-2 text-gray-700">
+                    <li>Save the generated code to a file with <code className="bg-gray-200 px-1 rounded">.spec.js</code> extension (e.g., <code className="bg-gray-200 px-1 rounded">soap-test.spec.js</code>)</li>
+                    <li>Install Playwright if not already installed: <code className="bg-gray-200 px-1 rounded">npm install @playwright/test</code></li>
+                    <li>Run the test: <code className="bg-gray-200 px-1 rounded">npx playwright test soap-test.spec.js</code></li>
+                    <li>Customize the assertions in the TODO comments based on your expected SOAP response</li>
+                    <li>Modify the test data and add more test cases as needed</li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </div>
-
-          <button
-            onClick={handleGenerate}
-            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
-          >
-            Generate Playwright Test
-          </button>
-
-          {error && (
-            <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-md">
-              {error}
-            </div>
-          )}
-
-          {generatedCode && (
-            <div className="mt-4">
-              <h2 className="text-xl font-semibold mb-2">Generated Playwright Test</h2>
-              <pre className="bg-gray-100 p-4 rounded-md overflow-auto">
-                <code>{generatedCode}</code>
-              </pre>
-              <p className="mt-2 text-sm text-gray-600">
-                Copy the above code into a <code>.spec.js</code> file and run it with Playwright.
-                Ensure Playwright is installed (<code>npm install @playwright/test</code>).
-                Add specific assertions based on your expected SOAP response.
-              </p>
-            </div>
-          )}
         </div>
       );
     };
