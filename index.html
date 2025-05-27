@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoapUI to Playwright Test Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.22.9/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const App = () => {
+      const [xmlInput, setXmlInput] = useState('');
+      const [generatedCode, setGeneratedCode] = useState('');
+      const [error, setError] = useState('');
+
+      const parseSoapUIXml = (xmlString) => {
+        try {
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+          if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+            throw new Error('Invalid XML format');
+          }
+
+          const requestNode = xmlDoc.getElementsByTagName('con:request')[0] || xmlDoc.getElementsByTagName('soap:Envelope')[0];
+          if (!requestNode) {
+            throw new Error('No SOAP request found in XML');
+          }
+
+          const endpoint = xmlDoc.getElementsByTagName('con:endpoint')[0]?.textContent || 'http://example.com/soap';
+          const method = 'POST'; // SOAP requests are typically POST
+          const headers = { 'Content-Type': 'text/xml; charset=utf-8' };
+          const soapActionNode = xmlDoc.getElementsByTagName('con:settings')[0]?.getElementsByTagName('con:setting');
+          let soapAction = '';
+          if (soapActionNode) {
+            for (let node of soapActionNode) {
+              if (node.getAttribute('id') === 'com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers') {
+                soapAction = node.textContent.match(/SOAPAction="([^"]+)"/)?.[1] || '';
+                if (soapAction) headers['SOAPAction'] = soapAction;
+              }
+            }
+          }
+
+          const requestBody = new XMLSerializer().serializeToString(requestNode);
+
+          return { endpoint, method, headers, requestBody };
+        } catch (err) {
+          throw new Error(`Failed to parse XML: ${err.message}`);
+        }
+      };
+
+      const generatePlaywrightTest = ({ endpoint, method, headers, requestBody }) => {
+        // Escape XML namespaces by replacing double quotes with escaped double quotes
+        const escapedRequestBody = requestBody.replace(/"/g, '\\"');
+        return `
+const { test, expect } = require('@playwright/test');
+
+test('SOAP Request Test', async ({ request }) => {
+  const response = await request.${method.toLowerCase()}('${endpoint}', {
+    headers: ${JSON.stringify(headers, null, 2)},
+    data: \`${escapedRequestBody}\`
+  });
+
+  // Assertions
+  await expect(response.status()).toBe(200);
+  const responseBody = await response.text();
+  await expect(responseBody).toContain('soap:Envelope');
+  // Add more specific assertions based on expected response
+  // Example: await expect(responseBody).toMatch(/<specificElement>[^<]+<\/specificElement>/);
+});
+        `.trim();
+      };
+
+      const handleGenerate = () => {
+        setError('');
+        setGeneratedCode('');
+        try {
+          if (!xmlInput.trim()) {
+            setError('Please provide a valid SoapUI XML');
+            return;
+          }
+          const parsedData = parseSoapUIXml(xmlInput);
+          const testCode = generatePlaywrightTest(parsedData);
+          setGeneratedCode(testCode);
+        } catch (err) {
+          setError(err.message);
+        }
+      };
+
+      const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            setXmlInput(e.target.result);
+            setError('');
+          };
+          reader.readAsText(file);
+        }
+      };
+
+      return (
+        <div className="container mx-auto p-4 max-w-4xl">
+          <h1 className="text-2xl font-bold mb-4 text-center">SoapUI to Playwright Test Generator</h1>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload SoapUI XML or Paste Below
+            </label>
+            <input
+              type="file"
+              accept=".xml"
+              onChange={handleFileUpload}
+              className="mb-2 block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100"
+            />
+            <textarea
+              className="w-full h-40 p-2 border rounded-md"
+              placeholder="Paste your SoapUI XML here"
+              value={xmlInput}
+              onChange={(e) => setXmlInput(e.target.value)}
+            ></textarea>
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
+          >
+            Generate Playwright Test
+          </button>
+
+          {error && (
+            <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
+
+          {generatedCode && (
+            <div className="mt-4">
+              <h2 className="text-xl font-semibold mb-2">Generated Playwright Test</h2>
+              <pre className="bg-gray-100 p-4 rounded-md overflow-auto">
+                <code>{generatedCode}</code>
+              </pre>
+              <p className="mt-2 text-sm text-gray-600">
+                Copy the above code into a <code>.spec.js</code> file and run it with Playwright.
+                Ensure Playwright is installed (<code>npm install @playwright/test</code>).
+                Add specific assertions based on your expected SOAP response.
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
