@@ -3,361 +3,194 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ReadyAPI REST → Playwright Test Generator</title>
-
-  <!-- ✅ Correct script tags -->
-  <ttps://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js</script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.22.9/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-
+  <title>ReadyAPI REST → Playwright Test Generator (Offline)</title>
   <style>
-    .code-container {
-      background: #111827;
-      color: #e5e7eb;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    :root {
+      --bg1: #eff6ff;
+      --bg2: #e0e7ff;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #2563eb;
+      --primary2: #1d4ed8;
+      --danger: #dc2626;
+      --dangerBg: #fef2f2;
+      --ok: #16a34a;
+      --ok2: #15803d;
+      --codeBg: #111827;
+      --codeText: #e5e7eb;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
     }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--text);
+      background: linear-gradient(135deg, var(--bg1), var(--bg2));
+    }
+    .container { max-width: 1120px; margin: 0 auto; padding: 28px 16px 40px; }
+    .title { text-align: center; margin-bottom: 18px; }
+    .title h1 { margin: 0 0 8px; font-size: 34px; }
+    .title p { margin: 0; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 10px 20px rgba(0,0,0,.06);
+      padding: 16px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 18px; }
+    label { display:block; font-size: 13px; font-weight: 600; margin: 10px 0 6px; color: #374151; }
+    input[type="text"], textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      outline: none;
+      box-sizing: border-box;
+      font-family: var(--sans);
+    }
+    textarea { min-height: 260px; font-family: var(--mono); }
+    input[type="file"] { width: 100%; }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: .15s ease;
+      font-size: 13px;
+    }
+    .btn.primary { background: var(--primary); color: white; flex: 1; }
+    .btn.primary:hover { background: var(--primary2); }
+    .btn.gray { background: #6b7280; color: white; }
+    .btn.gray:hover { background: #4b5563; }
+    .btn.green { background: var(--ok); color: white; }
+    .btn.green:hover { background: var(--ok2); }
+    .btn.indigo { background: #4f46e5; color: white; }
+    .btn.indigo:hover { background: #4338ca; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .pill { display:inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: #eef2ff; color: #3730a3; }
+    .error {
+      background: var(--dangerBg);
+      border: 1px solid #fecaca;
+      color: var(--danger);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-top: 12px;
+      white-space: pre-wrap;
+    }
+    .info {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    .code {
+      background: var(--codeBg);
+      color: var(--codeText);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      overflow: auto;
+      max-height: 520px;
+      white-space: pre;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .footerCard { margin-top: 16px; }
+    code.inline { background: #e5e7eb; border-radius: 6px; padding: 1px 6px; font-family: var(--mono); font-size: 12px; }
   </style>
 </head>
 
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100">
-  <div id="root"></div>
+<body>
+  <div class="container">
+    <div class="title">
+      <h1>ReadyAPI REST → Playwright Test Generator</h1>
+      <p>Offline single-file tool (no React/CDN). Paste JSON → Generate Playwright <span class="pill">.spec.js</span></p>
+    </div>
 
-  <script type="text/babel">
-    const { useRef, useState } = React;
+    <div class="grid">
+      <div class="card">
+        <h2>Input</h2>
 
+        <label>Suite / Project Name</label>
+        <input id="suiteName" type="text" value="ReadyAPI Project" />
+
+        <label>Upload JSON file (optional)</label>
+        <input id="fileInput" type="file" accept=".json" />
+
+        <div class="row">
+          <button id="loadSampleBtn" class="btn gray" type="button">Load sample</button>
+          <span class="small">Use this first to verify the tool works on your machine.</span>
+        </div>
+
+        <label>Paste JSON</label>
+        <textarea id="jsonInput" placeholder="Paste your JSON here..."></textarea>
+
+        <div class="row">
+          <button id="generateBtn" class="btn primary" type="button">Generate Playwright Spec</button>
+          <button id="clearBtn" class="btn gray" type="button">Clear</button>
+        </div>
+
+        <div id="errorBox" class="error" style="display:none;"></div>
+        <div id="infoBox" class="info" style="display:none;"></div>
+
+        <div class="small" style="margin-top:10px;">
+          If nothing appears after clicking buttons, open <b>F12 → Console</b> and paste the first red error here.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <span>Generated Spec</span>
+          <span>
+            <button id="copyBtn" class="btn green" type="button" disabled>Copy</button>
+            <button id="downloadBtn" class="btn indigo" type="button" disabled>Download .spec.js</button>
+          </span>
+        </h2>
+
+        <div id="codeBox" class="code">Generated code will appear here...</div>
+      </div>
+    </div>
+
+    <div class="card footerCard">
+      <h2>How to run</h2>
+      <ol class="small" style="margin:0; padding-left:18px; line-height:1.8;">
+        <li>Save the generated code as <code class="inline">readyapi-generated.spec.js</code></li>
+        <li>Install Playwright: <code class="inline">npm i -D @playwright/test</code></li>
+        <li>Run: <code class="inline">npx playwright test readyapi-generated.spec.js</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
     /***********************
      * Helpers
      ************************/
+    const $ = (id) => document.getElementById(id);
 
-    const jsString = (v) => JSON.stringify(String(v ?? ""));
-
-    const normalizeHeaders = (headers) => {
-      const out = {};
-      if (!headers || typeof headers !== "object") return out;
-      for (const [k, v] of Object.entries(headers)) out[String(k)] = String(v);
-      return out;
-    };
-
-    const looksJsonContentType = (headers) => {
-      const key = Object.keys(headers || {}).find(k => k.toLowerCase() === "content-type");
-      const ct = key ? headers[key] : "";
-      return typeof ct === "string" && ct.toLowerCase().includes("application/json");
-    };
-
-    // simple JSONPath evaluator: $.a.b , $.a[0].b , $.a['b']
-    function getBySimpleJsonPath(obj, path) {
-      if (!path || typeof path !== "string") return undefined;
-      let p = path.trim();
-      if (p.startsWith("$")) p = p.slice(1);
-      if (p.startsWith(".")) p = p.slice(1);
-
-      const tokens = [];
-      let i = 0;
-
-      while (i < p.length) {
-        if (p[i] === ".") { i++; continue; }
-
-        if (p[i] === "[") {
-          const close = p.indexOf("]", i);
-          if (close === -1) break;
-          const inside = p.slice(i + 1, close).trim();
-
-          if ((inside.startsWith("'") && inside.endsWith("'")) ||
-              (inside.startsWith('"') && inside.endsWith('"'))) {
-            tokens.push(inside.slice(1, -1));
-          } else if (/^\d+$/.test(inside)) {
-            tokens.push(Number(inside));
-          } else {
-            tokens.push(inside);
-          }
-          i = close + 1;
-          continue;
-        }
-
-        let j = i;
-        while (j < p.length && p[j] !== "." && p[j] !== "[") j++;
-        tokens.push(p.slice(i, j));
-        i = j;
-      }
-
-      return tokens.reduce((acc, t) => (acc == null ? undefined : acc[t]), obj);
+    function showError(msg) {
+      const box = $("errorBox");
+      box.style.display = "block";
+      box.textContent = msg;
     }
-
-    const isRestCandidate = (obj) => {
-      if (!obj || typeof obj !== "object") return false;
-      const hasUrl = obj.endpoint || obj.url || obj.uri || obj.path;
-      const hasMethod = obj.method || (obj.request && obj.request.method);
-      return Boolean(hasUrl && hasMethod);
-    };
-
-    const toRestStep = (obj, fallbackName) => {
-      const endpoint =
-        obj.endpoint || obj.url || obj.uri || obj.path ||
-        (obj.request && (obj.request.endpoint || obj.request.url || obj.request.uri || obj.request.path));
-
-      const method = (obj.method || (obj.request && obj.request.method) || "POST").toUpperCase();
-
-      const headers = normalizeHeaders(
-        obj.headers || (obj.request && obj.request.headers) || { "Content-Type": "application/json" }
-      );
-
-      const requestBody =
-        obj.requestBody ?? obj.body ?? obj.payload ??
-        (obj.request && (obj.request.requestBody ?? obj.request.body ?? obj.request.payload)) ??
-        null;
-
-      const assertions =
-        obj.assertions || obj.checks || obj.validations ||
-        (obj.request && (obj.request.assertions || obj.request.checks || obj.request.validations)) ||
-        [];
-
-      const name = obj.name || obj.stepName || obj.title || fallbackName;
-
-      return { name, endpoint, method, headers, requestBody, assertions };
-    };
-
-    const collectRestStepsDeep = (input) => {
-      const steps = [];
-      const visited = new Set();
-
-      const walk = (node) => {
-        if (!node || typeof node !== "object") return;
-        if (visited.has(node)) return;
-        visited.add(node);
-
-        if (Array.isArray(node)) {
-          node.forEach(walk);
-          return;
-        }
-
-        if (isRestCandidate(node)) steps.push(toRestStep(node, `Step ${steps.length + 1}`));
-
-        Object.values(node).forEach(walk);
-      };
-
-      walk(input);
-      return steps;
-    };
-
-    function parseReadyApiJson(input, defaultSuiteName = "ReadyAPI Project") {
-      const suiteName = input.projectName || input.suiteName || input.name || defaultSuiteName;
-
-      if (input.testCases && Array.isArray(input.testCases)) {
-        const testCases = input.testCases.map((tc, idx) => {
-          const tcName = tc.name || tc.testName || `TestCase ${idx + 1}`;
-          const list = tc.steps || tc.testSteps || tc.requests || tc.restRequests;
-          let steps = [];
-
-          if (Array.isArray(list)) {
-            steps = list.map((s, sIdx) => toRestStep(s, `Step ${sIdx + 1}`)).filter(s => s.endpoint);
-          }
-
-          if (!steps.length) steps = collectRestStepsDeep(tc);
-
-          return { name: tcName, steps };
-        });
-
-        return { suiteName, testCases: testCases.filter(tc => tc.steps.length) };
-      }
-
-      if (Array.isArray(input)) {
-        const steps = input.some(isRestCandidate)
-          ? input.filter(isRestCandidate).map((s, idx) => toRestStep(s, `Step ${idx + 1}`))
-          : collectRestStepsDeep(input);
-
-        return { suiteName, testCases: steps.length ? [{ name: "TestCase 1", steps }] : [] };
-      }
-
-      if (isRestCandidate(input) || input.endpoint || input.url) {
-        const step = toRestStep(input, "Step 1");
-        return { suiteName, testCases: [{ name: input.testName || "TestCase 1", steps: [step] }] };
-      }
-
-      const deep = collectRestStepsDeep(input);
-      return { suiteName, testCases: deep.length ? [{ name: "TestCase 1", steps: deep }] : [] };
+    function clearError() {
+      const box = $("errorBox");
+      box.style.display = "none";
+      box.textContent = "";
     }
-
-    function generatePlaywrightSpec({ suiteName, testCases }) {
-      const header = `
-const { test, expect } = require('@playwright/test');
-
-function getBySimpleJsonPath(obj, path) {
-  if (!path || typeof path !== 'string') return undefined;
-  let p = path.trim();
-  if (p.startsWith('$')) p = p.slice(1);
-  if (p.startsWith('.')) p = p.slice(1);
-
-  const tokens = [];
-  let i = 0;
-  while (i < p.length) {
-    if (p[i] === '.') { i++; continue; }
-    if (p[i] === '[') {
-      const close = p.indexOf(']', i);
-      if (close === -1) break;
-      const inside = p.slice(i + 1, close).trim();
-      if ((inside.startsWith("'") && inside.endsWith("'")) || (inside.startsWith('"') && inside.endsWith('"'))) {
-        tokens.push(inside.slice(1, -1));
-      } else if (/^\\d+$/.test(inside)) {
-        tokens.push(Number(inside));
-      } else {
-        tokens.push(inside);
-      }
-      i = close + 1;
-      continue;
+    function showInfo(msg) {
+      const box = $("infoBox");
+      box.style.display = "block";
+      box.textContent = msg;
     }
-    let j = i;
-    while (j < p.length && p[j] !== '.' && p[j] !== '[') j++;
-    tokens.push(p.slice(i, j));
-    i = j;
-  }
-
-  return tokens.reduce((acc, t) => (acc == null ? undefined : acc[t]), obj);
-}
-
-`.trim();
-
-      const suiteOpen = `test.describe(${jsString(suiteName)}, () => {`;
-
-      const tests = testCases.map(tc => {
-        const steps = (tc.steps || []).map((s, idx) => {
-          const headersLiteral = JSON.stringify(normalizeHeaders(s.headers), null, 2);
-          const isJson = looksJsonContentType(s.headers || {});
-          const method = (s.method || "POST").toUpperCase();
-          const hasBody = !["GET", "HEAD"].includes(method);
-
-          const assertions = Array.isArray(s.assertions) ? s.assertions : [];
-          const wantsText = assertions.some(a => (a?.type || "").toLowerCase() === "contains");
-          const wantsJson = assertions.some(a => (a?.type || "").toLowerCase() === "jsonpath");
-
-          let assertionCode = "";
-          if (wantsText || wantsJson) {
-            assertionCode += `      const rawBody = await response.text();\n`;
-            if (wantsJson) {
-              assertionCode += `      let jsonBody;\n`;
-              assertionCode += `      try { jsonBody = JSON.parse(rawBody); } catch { jsonBody = undefined; }\n\n`;
-            } else {
-              assertionCode += "\n";
-            }
-          }
-
-          for (const a of assertions) {
-            const t = (a?.type || "").toLowerCase();
-            if (t === "status") {
-              assertionCode += `      expect(response.status()).toBe(${Number(a.value ?? 200)});\n`;
-            } else if (t === "contains") {
-              assertionCode += `      expect(rawBody).toContain(${jsString(a.value ?? "")});\n`;
-            } else if (t === "jsonpath") {
-              const path = a.path ?? a.jsonPath ?? "$";
-              const expectedLiteral = JSON.stringify(a.value, null, 2);
-              assertionCode += `      const actual = getBySimpleJsonPath(jsonBody, ${jsString(path)});\n`;
-              assertionCode += `      expect(actual).toEqual(${expectedLiteral});\n`;
-            } else if (t === "header") {
-              const key = String(a.name || a.header || "").toLowerCase();
-              assertionCode += `      expect(response.headers()[${jsString(key)}]).toBe(${jsString(a.value ?? "")});\n`;
-            } else if (t) {
-              assertionCode += `      // TODO unsupported assertion type: ${jsString(t)}\n`;
-            }
-          }
-
-          if (!assertionCode.trim()) assertionCode = "      // No assertions found\n";
-
-          const bodyLiteral =
-            s.requestBody === null || s.requestBody === undefined
-              ? "undefined"
-              : JSON.stringify(s.requestBody, null, 2);
-
-          const requestCall =
-`      const response = await request.fetch(endpoint, {
-        method: ${jsString(method)},
-        headers: headers,${hasBody ? "\n        data: requestBody," : ""}
-      });`;
-
-          return `
-    await test.step(${jsString(s.name || `Step ${idx + 1}`)}, async () => {
-      const endpoint = ${jsString(s.endpoint)};
-      const headers = ${headersLiteral};
-      const requestBody = ${bodyLiteral};
-
-${requestCall}
-
-${assertionCode.trimEnd()}
-    });`.trim();
-        }).join("\n\n");
-
-        return `
-  test(${jsString(tc.name || "TestCase")}, async ({ request }) => {
-${steps ? steps : "    // No REST steps detected\n"}
-  });`.trim();
-      }).join("\n\n");
-
-      const suiteClose = `});`;
-      return [header, "", suiteOpen, "", tests, "", suiteClose].join("\n");
-    }
-
-    /***********************
-     * UI
-     ************************/
-
-    const App = () => {
-      const [jsonInput, setJsonInput] = useState("");
-      const [suiteName, setSuiteName] = useState("ReadyAPI Project");
-      const [generatedCode, setGeneratedCode] = useState("");
-      const [error, setError] = useState("");
-      const [summary, setSummary] = useState(null);
-      const [isLoading, setIsLoading] = useState(false);
-      const fileRef = useRef(null);
-
-      const sample = `{
-  "projectName": "Demo ReadyAPI Project",
-  "testCases": [
-    {
-      "name": "Create user",
-      "steps": [
-        {
-          "name": "POST /api/users",
-          "endpoint": "https://reqres.in/api/users",
-          "method": "POST",
-          "headers": { "Content-Type": "application/json" },
-          "requestBody": { "name": "Luffy", "job": "Pirate" },
-          "assertions": [
-            { "type": "status", "value": 201 },
-            { "type": "jsonPath", "path": "$.name", "value": "Luffy" }
-          ]
-        }
-      ]
-    }
-  ]
-}`;
-
-      const loadSample = () => {
-        setJsonInput(sample);
-        setError("");
-      };
-
-      const onUpload = (e) => {
-        const f = e.target.files?.[0];
-        if (!f) return;
-        if (!f.name.toLowerCase().endsWith(".json")) {
-          setError("Please upload a .json file");
-          return;
-        }
-        const r = new FileReader();
-        r.onload = () => { setJsonInput(String(r.result || "")); setError(""); };
-        r.onerror = () => setError("Failed to read file");
-        r.readAsText(f);
-      };
-
-      const clear = () => {
-        setJsonInput("");
-        setGeneratedCode("");
-        setError("");
-        setSummary(null);
-        if (fileRef.current) fileRef.current.value = "";
-      };
-
-      const copy = async () => {
-        await navigator.clipboard.writeText(generatedCode);
-      };
-
-      const download = () => {
