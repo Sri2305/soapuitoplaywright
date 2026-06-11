@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuiteShift · ReadyAPI → Playwright Converter</title>
+<meta name="description" content="Paste your ReadyAPI XML export, get ready-to-run Playwright API tests. Converts test suites, steps, assertions, OAuth2, and properties in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --ink:#0B111F; --ink-2:#161F35; --paper:#F7F6F2; --surface:#FFFFFF;
+  --line:#E7E5DC; --line-2:#D6D4CA;
+  --violet:#5B4BC4; --violet-d:#463aa3; --violet-soft:#EDEAFB;
+  --green:#1F9D45; --green-soft:#E6F4EB;
+  --amber:#B8740F; --amber-soft:#FBF1DE;
+  --red:#CE3C36; --red-soft:#FBEAE9;
+  --pink:#E8488B;
+  --tx:#131926; --tx-2:#4B5464; --tx-3:#79818F;
+  --r:10px; --r-lg:18px;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --disp:'Space Grotesk',sans-serif;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--body);background:var(--paper);color:var(--tx);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit}
+h1,h2,h3{font-family:var(--disp);font-weight:600;line-height:1.1;letter-spacing:-0.02em}
+code,pre,.mono{font-family:var(--mono)}
+.wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+.fa-fw{width:1.1em}
+
+/* ---- nav ---- */
+nav{position:sticky;top:0;z-index:40;background:rgba(247,246,242,0.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:66px;max-width:1140px;margin:0 auto;padding:0 24px}
+.brand{display:flex;align-items:center;gap:11px;font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:-0.02em}
+.brand .mark{width:32px;height:32px;border-radius:9px;background:var(--ink);display:grid;place-items:center;color:#fff;font-size:14px}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{font-size:14px;color:var(--tx-2);text-decoration:none;font-weight:500;transition:color .15s}
+.nav-links a:hover{color:var(--tx)}
+.nav-cta{display:inline-flex;align-items:center;gap:7px;background:var(--ink);color:#fff!important;padding:9px 17px;border-radius:9px;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,transform .15s}
+.nav-cta:hover{background:var(--ink-2);transform:translateY(-1px)}
+@media(max-width:820px){.nav-links a:not(.nav-cta){display:none}}
+
+/* ---- hero ---- */
+.hero{position:relative;padding:72px 0 30px;overflow:hidden}
+.hero-bg{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(620px 320px at 78% -8%, rgba(91,75,196,0.10), transparent 70%),
+    radial-gradient(520px 300px at 8% 18%, rgba(31,157,69,0.07), transparent 70%);}
+.hero-grid{position:absolute;inset:0;z-index:0;opacity:.5;pointer-events:none;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(circle at 50% 0%, #000 0%, transparent 62%);
+  -webkit-mask-image:radial-gradient(circle at 50% 0%, #000 0%, transparent 62%);}
+.hero .wrap{position:relative;z-index:1}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;font-weight:500;color:var(--violet-d);background:var(--surface);border:1px solid var(--line);padding:7px 14px;border-radius:100px;letter-spacing:0.01em;box-shadow:0 1px 0 rgba(0,0,0,0.02)}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+h1.hero-h{font-size:clamp(36px,5.4vw,60px);margin:24px 0 18px;letter-spacing:-0.035em;font-weight:700}
+h1.hero-h .gr{position:relative;color:var(--green);white-space:nowrap}
+.hero-sub{font-size:18px;color:var(--tx-2);max-width:640px}
+.hero-sub b{color:var(--tx);font-weight:600}
+.trust{display:flex;gap:22px;flex-wrap:wrap;margin-top:22px}
+.trust span{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--tx-2)}
+.trust i{color:var(--green)}
+
+/* ---- converter ---- */
+.machine{margin-top:38px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+  box-shadow:0 1px 0 var(--line),0 30px 60px -34px rgba(11,17,31,0.40)}
+.machine-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:var(--ink);color:#fff}
+.machine-bar .seg{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12.5px;color:#C2C8D6}
+.machine-bar .seg b{color:#fff;font-weight:500}
+.machine-bar .seg i{font-size:11px;color:#7d869c}
+.machine-bar .dots{display:flex;gap:6px}
+.machine-bar .dots i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.machine-grid{display:grid;grid-template-columns:1fr 60px 1fr}
+@media(max-width:880px){.machine-grid{grid-template-columns:1fr}}
+.pane{display:flex;flex-direction:column;min-height:380px}
+.pane-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:#FCFCFA}
+.pane-head .label{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--tx-2);text-transform:uppercase;letter-spacing:0.05em}
+.pane-head .label i.src{color:var(--amber)}
+.pane-head .label i.dst{color:var(--green)}
+.linkbtn{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--violet);background:none;border:none;cursor:pointer;font-weight:500;padding:5px 9px;border-radius:7px;transition:background .15s}
+.linkbtn:hover{background:var(--violet-soft)}
+textarea#xmlIn{flex:1;border:none;outline:none;resize:none;padding:18px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--tx);background:transparent;tab-size:2}
+textarea#xmlIn::placeholder{color:var(--tx-3)}
+.divider-col{position:relative;display:grid;place-items:center;background:#FCFCFA;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.divider-col::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:repeating-linear-gradient(var(--line-2) 0 5px,transparent 5px 11px)}
+@media(max-width:880px){.divider-col{display:none}}
+.convert-fab{position:relative;width:46px;height:46px;border-radius:50%;background:var(--violet);color:#fff;border:none;cursor:pointer;display:grid;place-items:center;font-size:16px;box-shadow:0 8px 22px -6px rgba(91,75,196,0.75);transition:transform .15s,background .15s}
+.convert-fab:hover{background:var(--violet-d);transform:scale(1.09)}
+.convert-fab:active{transform:scale(0.95)}
+.convert-fab.busy{pointer-events:none}
+.convert-fab.busy i{animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.out-wrap{flex:1;display:flex;flex-direction:column;background:var(--ink-2)}
+.tabs{display:flex;gap:3px;padding:9px 11px 0;overflow-x:auto;background:var(--ink-2)}
+.tabs::-webkit-scrollbar{height:0}
+.tab{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;color:#98a1b4;background:transparent;border:none;cursor:pointer;padding:8px 13px;border-radius:8px 8px 0 0;white-space:nowrap;font-weight:500;transition:color .15s,background .15s}
+.tab i{font-size:11px;opacity:.8}
+.tab.active{background:var(--ink);color:#fff}
+.tab:hover:not(.active){color:#cfd5e1}
+pre#codeOut{flex:1;margin:0;padding:18px;overflow:auto;font-size:12px;line-height:1.75;color:#E2E6EE;background:var(--ink);min-height:0}
+pre#codeOut .c-key{color:#C3B6FF}
+pre#codeOut .c-str{color:#9BE3A8}
+pre#codeOut .c-com{color:#79859b;font-style:italic}
+pre#codeOut .c-todo{color:#F0B450}
+pre#codeOut .c-fn{color:#8FD3FF}
+.out-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#7d8699;font-family:var(--mono);font-size:13px;text-align:center;padding:40px}
+.out-empty i{font-size:30px;color:#414c66}
+.out-actions{display:flex;gap:9px;padding:11px 13px;border-top:1px solid rgba(255,255,255,0.08);background:var(--ink-2)}
+.obtn{font-family:var(--mono);font-size:12px;font-weight:500;color:#fff;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.13);padding:9px 13px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
+.obtn:hover:not(:disabled){background:rgba(255,255,255,0.16)}
+.obtn.primary{background:var(--green);border-color:var(--green)}
+.obtn.primary:hover:not(:disabled){background:#1a8c3c}
+.obtn:disabled{opacity:0.38;cursor:not-allowed}
+
+/* ---- summary chips ---- */
+.summary{display:flex;flex-wrap:wrap;gap:11px;margin-top:20px}
+.chip{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 16px;box-shadow:0 1px 0 rgba(0,0,0,0.02)}
+.chip .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:13px}
+.chip .tx .n{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-0.02em;line-height:1}
+.chip .tx .l{font-size:12px;color:var(--tx-2)}
+.chip.vio .ic{background:var(--violet-soft);color:var(--violet-d)}
+.chip.good .ic{background:var(--green-soft);color:var(--green)}
+.chip.warn .ic{background:var(--amber-soft);color:var(--amber)}
+.chip.warn .n{color:var(--amber)}
+.chip.gray .ic{background:#EEEDE7;color:var(--tx-2)}
+.hidden{display:none!important}
+
+/* ---- sections ---- */
+section{padding:78px 0}
+.sec-head{max-width:660px;margin-bottom:42px}
+.sec-eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;font-weight:500;color:var(--violet);letter-spacing:0.05em;text-transform:uppercase}
+.sec-head h2{font-size:clamp(27px,3.6vw,40px);margin:13px 0 14px}
+.sec-head p{font-size:17px;color:var(--tx-2)}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+@media(max-width:820px){.steps{grid-template-columns:1fr}}
+.step{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:30px 28px;transition:transform .2s,box-shadow .2s,border-color .2s}
+.step:hover{transform:translateY(-3px);box-shadow:0 18px 40px -30px rgba(11,17,31,0.4);border-color:var(--line-2)}
+.step .ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:18px;margin-bottom:18px;background:var(--violet-soft);color:var(--violet-d)}
+.step .num{position:absolute;top:26px;right:28px;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--line-2)}
+.step h3{font-size:18px;margin-bottom:9px}
+.step p{font-size:14.5px;color:var(--tx-2)}
+.step code{font-size:12px;background:var(--paper);border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--violet-d)}
+
+/* mapping table */
+.maptable{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;font-size:14px}
+.maptable th{text-align:left;font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:0.05em;color:var(--tx-3);padding:15px 20px;border-bottom:1px solid var(--line);background:#FCFCFA;font-weight:500}
+.maptable td{padding:14px 20px;border-bottom:1px solid var(--line);vertical-align:middle}
+.maptable tr:last-child td{border-bottom:none}
+.maptable tbody tr{transition:background .12s}
+.maptable tbody tr:hover{background:#FCFBF7}
+.maptable td.from{color:var(--tx-2)}
+.maptable td.to code{font-family:var(--mono);font-size:12.5px;color:var(--green);background:var(--green-soft);padding:3px 8px;border-radius:6px}
+.tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 10px;border-radius:100px}
+.tag.auto{color:var(--green);background:var(--green-soft)}
+.tag.manual{color:var(--amber);background:var(--amber-soft)}
+
+/* toolkit */
+.kit{display:grid;grid-template-columns:1.1fr 0.9fr;gap:26px;align-items:start}
+@media(max-width:880px){.kit{grid-template-columns:1fr}}
+.kit-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:32px}
+.kit-card.dark{background:linear-gradient(165deg,var(--ink-2),var(--ink));color:#fff;border-color:var(--ink)}
+.kit-card .kh{display:flex;align-items:center;gap:12px;margin-bottom:7px}
+.kit-card .kh .ki{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:17px;background:var(--violet-soft);color:var(--violet-d)}
+.kit-card.dark .kh .ki{background:rgba(255,255,255,0.1);color:#cdb8ff}
+.kit-card h3{font-size:20px}
+.kit-card .sub{font-size:14px;color:var(--tx-2);margin-bottom:22px}
+.kit-card.dark .sub{color:#aab2c4}
+.dl-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-top:1px solid var(--line)}
+.kit-card.dark .dl-row{border-color:rgba(255,255,255,0.1)}
+.dl-row .meta{display:flex;align-items:center;gap:13px;min-width:0}
+.dl-row .fi{font-family:var(--mono);font-size:11px;font-weight:700;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}
+.fi.js{background:#FBF1DE;color:#B8740F}
+.fi.md{background:var(--violet-soft);color:var(--violet-d)}
+.kit-card.dark .fi.md{background:rgba(205,184,255,0.16);color:#cdb8ff}
+.dl-row .fname{font-family:var(--mono);font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl-row .fdesc{font-size:12px;color:var(--tx-3)}
+.kit-card.dark .fdesc{color:#8a93a6}
+.dlbtn{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--violet-d);background:var(--violet-soft);border:none;padding:9px 15px;border-radius:9px;cursor:pointer;flex-shrink:0;transition:background .15s,transform .15s}
+.dlbtn:hover{background:#e2ddf7;transform:translateY(-1px)}
+.kit-card.dark .dlbtn{background:rgba(255,255,255,0.12);color:#fff}
+.kit-card.dark .dlbtn:hover{background:rgba(255,255,255,0.2)}
+
+/* support */
+.support{position:relative;overflow:hidden;background:linear-gradient(165deg,#fff,#FBFAF5);border:1px solid var(--line);border-radius:22px;padding:54px 44px;text-align:center}
+.support::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(440px 240px at 50% -20%, rgba(232,72,139,0.10), transparent 70%);}
+.support .inner{position:relative;z-index:1}
+.support .badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;font-weight:500;color:var(--pink);background:#FCEAF2;padding:7px 14px;border-radius:100px;margin-bottom:18px}
+.support h2{font-size:clamp(26px,3.4vw,34px);margin-bottom:13px}
+.support p{font-size:16px;color:var(--tx-2);max-width:540px;margin:0 auto 30px}
+.support-btns{display:flex;gap:15px;justify-content:center;flex-wrap:wrap}
+.sbtn{display:inline-flex;align-items:center;gap:11px;padding:15px 28px;border-radius:13px;font-weight:600;font-size:15px;text-decoration:none;border:1px solid transparent;transition:transform .16s,box-shadow .16s,filter .16s}
+.sbtn i{font-size:17px}
+.sbtn.paypal{background:linear-gradient(135deg,var(--violet),var(--pink));color:#fff;box-shadow:0 10px 26px -10px rgba(232,72,139,0.6)}
+.sbtn.paypal:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:0 14px 30px -10px rgba(232,72,139,0.7)}
+.sbtn.bmc{background:#FFDD00;color:#13131a;box-shadow:0 10px 26px -12px rgba(0,0,0,0.4)}
+.sbtn.bmc:hover{transform:translateY(-2px);background:#ffe534}
+.support .micro{margin-top:24px;font-size:13px;color:var(--tx-3);display:flex;align-items:center;justify-content:center;gap:8px}
+
+/* faq */
+.faq-item{border-top:1px solid var(--line);padding:24px 0}
+.faq-item:last-child{border-bottom:1px solid var(--line)}
+.faq-item h3{display:flex;align-items:center;gap:10px;font-size:17px;font-family:var(--body);font-weight:600;margin-bottom:8px}
+.faq-item h3 i{color:var(--violet);font-size:14px}
+.faq-item p{font-size:14.5px;color:var(--tx-2);padding-left:24px}
+.faq-item code{font-family:var(--mono);font-size:12.5px;background:var(--paper);border:1px solid var(--line);padding:1px 6px;border-radius:5px}
+
+/* footer */
+footer{background:var(--ink);color:#aab2c4;padding:54px 0;font-size:13.5px}
+footer .ft-in{display:flex;justify-content:space-between;gap:28px;flex-wrap:wrap}
+footer .brand{color:#fff;margin-bottom:15px}
+footer .brand .mark{background:#fff;color:var(--ink)}
+footer a{color:#cdd3e0;text-decoration:none;transition:color .15s}
+footer a:hover{color:#fff}
+.ft-disc{max-width:580px;line-height:1.65}
+.ft-links{display:flex;gap:18px;align-items:center}
+
+/* toast */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--ink);color:#fff;padding:13px 22px;border-radius:11px;font-size:14px;font-weight:500;box-shadow:0 14px 34px -10px rgba(0,0,0,0.55);transition:transform .32s cubic-bezier(.2,.9,.3,1.2);z-index:80;display:flex;align-items:center;gap:10px}
+.toast i{color:var(--green)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+.fade{opacity:0;transform:translateY(16px);animation:fade .7s ease forwards}
+@keyframes fade{to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <div class="brand"><span class="mark"><i class="fa-solid fa-code-compare"></i></span> SuiteShift</div>
+    <div class="nav-links">
+      <a href="#tool">Converter</a>
+      <a href="#how">How it works</a>
+      <a href="#mapping">Coverage</a>
+      <a href="#toolkit">Toolkit</a>
+      <a href="#support" class="nav-cta"><i class="fa-solid fa-heart"></i> Support</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="wrap">
+    <div class="fade">
+      <span class="eyebrow"><span class="dot"></span> ReadyAPI → Playwright · runs entirely in your browser</span>
+      <h1 class="hero-h">Turn ReadyAPI suites into<br><span class="gr">Playwright tests</span> in seconds.</h1>
+      <p class="hero-sub">Paste a ReadyAPI project export and get ready-to-run Playwright API tests — <b>suites, steps, assertions, OAuth2 scaffolding, and properties</b> mapped for you. Nothing is uploaded; conversion happens on your machine.</p>
+      <div class="trust">
+        <span><i class="fa-solid fa-shield-halved"></i> No upload, fully local</span>
+        <span><i class="fa-solid fa-bolt"></i> Instant conversion</span>
+        <span><i class="fa-solid fa-file-zipper"></i> Download as .zip</span>
+      </div>
+    </div>
+
+    <div class="machine fade" id="tool" style="animation-delay:.1s">
+      <div class="machine-bar">
+        <span class="seg"><i class="fa-solid fa-file-code" style="color:#e0a44a"></i> <b>ReadyAPI</b> XML</span>
+        <span class="dots"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></span>
+        <span class="seg"><b style="color:#7CE38B">Playwright</b> .spec.ts <i class="fa-solid fa-circle-check" style="color:#27c93f"></i></span>
+      </div>
+      <div class="machine-grid">
+        <div class="pane">
+          <div class="pane-head">
+            <span class="label"><i class="fa-solid fa-file-import src"></i> Paste ReadyAPI XML</span>
+            <button class="linkbtn" id="sampleBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> Load sample</button>
+          </div>
+          <textarea id="xmlIn" spellcheck="false" placeholder="Paste the contents of your ReadyAPI project export (.xml) here, then press the convert button →
+
+In ReadyAPI: right-click your project → Export Project → open the .xml and copy everything.
+
+Tip: Ctrl/Cmd + Enter to convert."></textarea>
+        </div>
+        <div class="divider-col">
+          <button class="convert-fab" id="convertBtn" title="Convert" aria-label="Convert"><i class="fa-solid fa-play"></i></button>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <span class="label"><i class="fa-solid fa-file-export dst"></i> Generated Playwright</span>
+            <button class="linkbtn" id="copyBtn"><i class="fa-regular fa-copy"></i> Copy file</button>
+          </div>
+          <div class="out-wrap">
+            <div class="tabs hidden" id="tabs"></div>
+            <pre id="codeOut" class="hidden"></pre>
+            <div class="out-empty" id="outEmpty">
+              <i class="fa-solid fa-arrow-left-long"></i>
+              <span>Your converted .spec.ts and .env files<br>will appear here</span>
+            </div>
+            <div class="out-actions">
+              <button class="obtn primary" id="zipBtn" disabled><i class="fa-solid fa-file-zipper"></i> Download all (.zip)</button>
+              <button class="obtn" id="fileBtn" disabled><i class="fa-solid fa-download"></i> This file</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary hidden" id="summary"></div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-eyebrow"><i class="fa-solid fa-diagram-project"></i> The workflow</div>
+      <h2>Built for parity, not guesswork</h2>
+      <p>The converter does the reliable, mechanical 80% deterministically. The judgement calls are flagged for you — never silently guessed.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="ic"><i class="fa-solid fa-arrows-turn-right"></i></div>
+        <span class="num">01</span>
+        <h3>Convert the structure</h3>
+        <p>Each suite becomes a <code>.spec.ts</code>, each step a <code>test.step()</code>, each status check a real assertion. Properties land in <code>.env</code>.</p>
+      </div>
+      <div class="step">
+        <div class="ic"><i class="fa-solid fa-flag"></i></div>
+        <span class="num">02</span>
+        <h3>Review the flags</h3>
+        <p>Groovy scripts and dynamic transfers are marked <code>// TODO</code> and <code>// REVIEW</code> so a human or Copilot finishes them with full context.</p>
+      </div>
+      <div class="step">
+        <div class="ic"><i class="fa-solid fa-circle-play"></i></div>
+        <span class="num">03</span>
+        <h3>Run against your API</h3>
+        <p>Drop the files into a Playwright project, fill secrets in <code>.env</code>, then <code>npx playwright test</code>. Compare to ReadyAPI for parity.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="mapping" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-eyebrow"><i class="fa-solid fa-list-check"></i> Coverage</div>
+      <h2>What converts automatically</h2>
+      <p>Every ReadyAPI assertion type has a home. The strict ones are automatic; the open-ended ones are flagged for review.</p>
+    </div>
+    <table class="maptable">
+      <thead><tr><th>ReadyAPI assertion</th><th>Becomes</th><th style="text-align:right">Mode</th></tr></thead>
+      <tbody>
+        <tr><td class="from">Valid HTTP Status Codes</td><td class="to"><code>A.assertStatus(res, 200)</code></td><td style="text-align:right"><span class="tag auto"><i class="fa-solid fa-bolt"></i> auto</span></td></tr>
+        <tr><td class="from">Contains</td><td class="to"><code>A.assertContains(res, '…')</code></td><td style="text-align:right"><span class="tag auto"><i class="fa-solid fa-bolt"></i> auto</span></td></tr>
+        <tr><td class="from">JsonPath Match</td><td class="to"><code>A.assertJsonPathDeep(…)</code></td><td style="text-align:right"><span class="tag manual"><i class="fa-solid fa-flag"></i> flagged</span></td></tr>
+        <tr><td class="from">JsonPath Existence</td><td class="to"><code>A.assertJsonPathExists(…)</code></td><td style="text-align:right"><span class="tag manual"><i class="fa-solid fa-flag"></i> flagged</span></td></tr>
+        <tr><td class="from">Property transfer</td><td class="to"><code>ctx.value = …</code></td><td style="text-align:right"><span class="tag manual"><i class="fa-solid fa-flag"></i> flagged</span></td></tr>
+        <tr><td class="from">Groovy script assertion</td><td class="to"><code>// GROOVY → expect(…)</code></td><td style="text-align:right"><span class="tag manual"><i class="fa-solid fa-flag"></i> flagged</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="toolkit" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-eyebrow"><i class="fa-solid fa-toolbox"></i> Take it further</div>
+      <h2>The full toolkit, free to download</h2>
+      <p>The browser converter is great for one-off jobs. For the full 1,000-step migration, grab the command-line script and the GitHub Copilot agent that finishes the flagged parts.</p>
+    </div>
+    <div class="kit">
+      <div class="kit-card">
+        <div class="kh"><span class="ki"><i class="fa-solid fa-terminal"></i></span><h3>Command-line engine</h3></div>
+        <p class="sub">Run the same conversion over your whole export, generating every suite file plus <code style="font-family:var(--mono);font-size:12px">.env</code> at once.</p>
+        <div class="dl-row">
+          <div class="meta">
+            <span class="fi js">JS</span>
+            <div style="min-width:0"><div class="fname">migrate.mjs</div><div class="fdesc">Node ES module · deterministic generator</div></div>
+          </div>
+          <button class="dlbtn" data-file="migrate"><i class="fa-solid fa-download"></i> Get</button>
+        </div>
+        <div class="dl-row">
+          <div class="meta">
+            <span class="fi md">MD</span>
+            <div style="min-width:0"><div class="fname">README.md</div><div class="fdesc">Setup + step-by-step workflow</div></div>
+          </div>
+          <button class="dlbtn" data-file="readme"><i class="fa-solid fa-download"></i> Get</button>
+        </div>
+      </div>
+      <div class="kit-card dark">
+        <div class="kh"><span class="ki"><i class="fa-solid fa-robot"></i></span><h3>Copilot agent</h3></div>
+        <p class="sub">Drops into <code style="font-family:var(--mono);font-size:12px;color:#cdd3e0">.github/agents/</code> and finishes the flagged Groovy and transfers, following your conventions.</p>
+        <div class="dl-row">
+          <div class="meta">
+            <span class="fi md">MD</span>
+            <div style="min-width:0"><div class="fname">readyapi-migrator.agent.md</div><div class="fdesc">Custom agent definition</div></div>
+          </div>
+          <button class="dlbtn" data-file="agent"><i class="fa-solid fa-download"></i> Get</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="support" style="padding-top:0">
+  <div class="wrap">
+    <div class="support">
+      <div class="inner">
+        <span class="badge"><i class="fa-solid fa-heart"></i> Keep it free & maintained</span>
+        <h2>Saved you a week? Tip the jar.</h2>
+        <p>This converter and toolkit are free to use. If they turned a multi-day migration slog into an afternoon, a small tip keeps them maintained and improving.</p>
+        <div class="support-btns">
+          <a href="https://www.paypal.com/donate?hosted_button_id=FSQJNT5N6FUZJ" target="_blank" rel="noopener noreferrer" class="sbtn paypal"><i class="fa-solid fa-heart"></i> Donate via PayPal</a>
+          <a href="https://buymeacoffee.com/onlinetools1" target="_blank" rel="noopener noreferrer" class="sbtn bmc"><i class="fa-solid fa-mug-hot"></i> Buy me a coffee</a>
+        </div>
+        <p class="micro"><i class="fa-solid fa-lock"></i> Payments handled securely by PayPal & Buy Me a Coffee — no card details touch this page.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-eyebrow"><i class="fa-solid fa-circle-question"></i> Good to know</div>
+      <h2>Questions</h2>
+    </div>
+    <div class="faq-item">
+      <h3><i class="fa-solid fa-shield-halved"></i> Is my XML uploaded anywhere?</h3>
+      <p>No. Parsing and conversion run entirely in your browser with JavaScript. Nothing leaves your machine — safe for corporate code.</p>
+    </div>
+    <div class="faq-item">
+      <h3><i class="fa-solid fa-key"></i> Does it handle OAuth2?</h3>
+      <p>The generated tests use a <code>bearerToken</code> fixture for auth instead of hardcoding tokens. You wire your OAuth2 grant once in the fixture (covered in the README) and every test inherits it.</p>
+    </div>
+    <div class="faq-item">
+      <h3><i class="fa-solid fa-flag"></i> Why are some things flagged instead of converted?</h3>
+      <p>Groovy scripts and dynamic property paths can't be translated mechanically without risking an assertion that passes for the wrong reason. Flagging keeps the migration honest — you finish those with full context, or hand them to the Copilot agent.</p>
+    </div>
+    <div class="faq-item">
+      <h3><i class="fa-solid fa-scale-balanced"></i> Can I sell access to this?</h3>
+      <p>The page packages your own explanation and tooling. Playwright, ReadyAPI, and Copilot are other companies' products — sell your work, don't redistribute their docs or imply endorsement, and make sure any test data you use is yours to share.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap ft-in">
+    <div>
+      <div class="brand"><span class="mark"><i class="fa-solid fa-code-compare"></i></span> SuiteShift</div>
+      <p class="ft-disc">A browser-based ReadyAPI to Playwright converter. Not affiliated with SmartBear, Microsoft, or GitHub. Playwright and ReadyAPI are trademarks of their respective owners.</p>
+    </div>
+    <div class="ft-links">
+      <a href="#tool">Converter</a> <a href="#toolkit">Toolkit</a> <a href="#support">Support</a>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<!-- ============ embedded toolkit files (text/plain = not executed) ============ -->
+<script type="text/plain" id="src-sample">&lt;con:soapui-project name="UserService" xmlns:con="http://eviware.com/soapui/config"&gt;
+  &lt;con:properties&gt;
+    &lt;con:property&gt;&lt;con:name&gt;baseUrl&lt;/con:name&gt;&lt;con:value&gt;https://api.example.com&lt;/con:value&gt;&lt;/con:property&gt;
+    &lt;con:property&gt;&lt;con:name&gt;clientId&lt;/con:name&gt;&lt;con:value&gt;svc-test&lt;/con:value&gt;&lt;/con:property&gt;
+  &lt;/con:properties&gt;
+  &lt;con:testSuite name="User Management"&gt;
+    &lt;con:testCase name="TC01 - Create and read user"&gt;
+      &lt;con:testStep type="restrequest" name="Create user"&gt;
+        &lt;con:config method="POST" resourcePath="/users"&gt;
+          &lt;con:request&gt;{ "name": "Asha", "role": "viewer" }&lt;/con:request&gt;
+          &lt;con:assertion type="Valid HTTP Status Codes"&gt;
+            &lt;con:configuration&gt;&lt;codes&gt;201&lt;/codes&gt;&lt;/con:configuration&gt;
+          &lt;/con:assertion&gt;
+        &lt;/con:config&gt;
+      &lt;/con:testStep&gt;
+      &lt;con:testStep type="transfer" name="Grab user id"&gt;
+        &lt;con:config&gt;&lt;con:transfers&gt;&lt;con:targetType&gt;userId&lt;/con:targetType&gt;&lt;/con:transfers&gt;&lt;/con:config&gt;
+      &lt;/con:testStep&gt;
+      &lt;con:testStep type="restrequest" name="Read user"&gt;
+        &lt;con:config method="GET" resourcePath="/users/${userId}"&gt;
+          &lt;con:assertion type="Valid HTTP Status Codes"&gt;
+            &lt;con:configuration&gt;&lt;codes&gt;200&lt;/codes&gt;&lt;/con:configuration&gt;
+          &lt;/con:assertion&gt;
+          &lt;con:assertion type="JsonPath Match"&gt;
+            &lt;con:configuration&gt;&lt;path&gt;$.role&lt;/path&gt;&lt;content&gt;viewer&lt;/content&gt;&lt;/con:configuration&gt;
+          &lt;/con:assertion&gt;
+        &lt;/con:config&gt;
+      &lt;/con:testStep&gt;
+    &lt;/con:testCase&gt;
+    &lt;con:testCase name="TC02 - Reject duplicate email"&gt;
+      &lt;con:testStep type="restrequest" name="Create duplicate"&gt;
+        &lt;con:config method="POST" resourcePath="/users"&gt;
+          &lt;con:request&gt;{ "email": "asha@example.com" }&lt;/con:request&gt;
+          &lt;con:assertion type="Valid HTTP Status Codes"&gt;
+            &lt;con:configuration&gt;&lt;codes&gt;409&lt;/codes&gt;&lt;/con:configuration&gt;
+          &lt;/con:assertion&gt;
+          &lt;con:assertion type="Script"&gt;
+            &lt;con:script&gt;assert json.error == "DUPLICATE_EMAIL"&lt;/con:script&gt;
+          &lt;/con:assertion&gt;
+        &lt;/con:config&gt;
+      &lt;/con:testStep&gt;
+    &lt;/con:testCase&gt;
+  &lt;/con:testSuite&gt;
+&lt;/con:soapui-project&gt;</script>
+
+<script type="text/plain" id="src-migrate">// migrate.mjs - deterministic ReadyAPI XML to Playwright skeleton generator
+// Usage: npm install fast-xml-parser && node scripts/migrate.mjs ./Project.xml
+import { XMLParser } from 'fast-xml-parser';
+import fs from 'fs';
+
+const inputPath = process.argv[2];
+if (!inputPath) { console.error('Usage: node migrate.mjs <Project.xml>'); process.exit(1); }
+
+const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+const doc = parser.parse(fs.readFileSync(inputPath, 'utf-8'));
+const asArray = v => v == null ? [] : Array.isArray(v) ? v : [v];
+const project = doc['con:soapui-project'];
+if (!project) { console.error('Not a ReadyAPI export'); process.exit(1); }
+
+fs.mkdirSync('generated/src/tests', { recursive: true });
+const envVars = {};
+const sanitize = s => (s || 'unnamed').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+function collectProps(node) {
+  for (const p of asArray(node?.['con:properties']?.['con:property'])) {
+    const name = (p['con:name'] || '').trim();
+    if (name) envVars[name] = p['con:value'] ?? '';
+  }
+}
+collectProps(project);
+for (const env of asArray(project['con:environment'])) collectProps(env);
+
+for (const suite of asArray(project['con:testSuite'])) {
+  collectProps(suite);
+  const lines = [
+    "import { test, expect } from '../fixtures/auth.fixture';",
+    "import { ApiClient } from '../helpers/apiClient';",
+    "import * as A from '../assertions/assertHelpers';",
+    '',
+    'test.describe(' + JSON.stringify(suite['@_name'] || 'Suite') + ', () => {'
+  ];
+  for (const tc of asArray(suite['con:testCase'])) {
+    collectProps(tc);
+    lines.push('', '  test(' + JSON.stringify(tc['@_name'] || 'Case') + ', async ({ request, bearerToken }) => {');
+    lines.push('    const api = new ApiClient(request, bearerToken);');
+    lines.push('    const ctx = {};');
+    for (const step of asArray(tc['con:testStep'])) {
+      const name = step['@_name'] || 'step', type = step['@_type'] || '';
+      if (type === 'restrequest' || type === 'httprequest') {
+        const cfg = step['con:config'] || {};
+        const method = (cfg['@_method'] || 'GET').toLowerCase();
+        const path = cfg['@_resourcePath'] || '/';
+        const body = cfg['con:request'] || '';
+        lines.push('', '    await test.step(' + JSON.stringify(name) + ', async () => {');
+        lines.push('      const res = await api.' + method + '(`' + path + '`' + (body ? ', ' + JSON.stringify(String(body)) : '') + ');');
+        const asserts = asArray(cfg['con:assertion']);
+        if (!asserts.length) lines.push('      await A.assertStatus(res, 200); // TODO confirm status');
+        for (const a of asserts) {
+          const at = a['@_type'] || '', conf = a['con:configuration'] || {};
+          if (at.includes('Valid HTTP Status')) lines.push('      await A.assertStatus(res, ' + String(conf['codes'] || '200').split(/[\s,]+/)[0] + ');');
+          else if (at.includes('JsonPath')) lines.push('      // TODO JsonPath: ' + (conf['path'] || '') + ' == ' + JSON.stringify(conf['content'] || ''));
+          else if (at.includes('Contains')) lines.push('      await A.assertContains(res, ' + JSON.stringify(String(conf['token'] || '')) + ');');
+          else if (at.includes('Script')) { lines.push('      // GROOVY - convert by hand or with Copilot:'); for (const s of String(a['con:script'] || '').split('\n')) lines.push('      //   ' + s); }
+          else lines.push('      // Assertion "' + at + '" - review manually');
+        }
+        lines.push('    });');
+      } else if (type === 'transfer' || type === 'properties') {
+        lines.push('    // PROPERTY TRANSFER "' + name + '" - set ctx.* here');
+        lines.push('    // TODO: ctx.value = (await res.json()).<path>;');
+      } else lines.push('    // Step "' + name + '" (' + type + ') - manual migration');
+    }
+    lines.push('  });');
+  }
+  lines.push('});', '');
+  fs.writeFileSync('generated/src/tests/' + sanitize(suite['@_name']) + '.spec.ts', lines.join('\n'));
+}
+
+fs.writeFileSync('generated/.env.generated',
+  Object.entries(envVars).map(([k, v]) => sanitize(k).toUpperCase() + '=' + v).join('\n') + '\n');
+console.log('Done. Review TODO/GROOVY markers, then run the Copilot agent on the rest.');</script>
+
+<script type="text/plain" id="src-agent">---
+name: readyapi-migrator
+description: Converts ReadyAPI test steps and assertions into Playwright API tests following this project's conventions. Use for migrating test cases, converting Groovy assertions, and filling property-transfer logic.
+tools: ['read', 'search', 'edit']
+---
+
+# ReadyAPI to Playwright migration agent
+
+You are a senior test automation engineer migrating ReadyAPI API tests to Playwright. You convert ReadyAPI XML into clean Playwright TypeScript that matches this repo's structure exactly.
+
+## Conventions you must follow
+- One suite = one .spec.ts in src/tests/ wrapped in test.describe().
+- One test case = one test(); one step = one test.step() (preserve original names).
+- Requests go through the ApiClient helper; assertions through A.* helpers. Never raw request.* or raw expect() unless no helper fits.
+- Auth via the bearerToken fixture. Never hardcode tokens, secrets, or URLs.
+- Property transfers become a ctx.* variable declared at the top of the test.
+- Config comes from process.env / .env.
+
+## Assertion mapping
+- Valid HTTP Status Codes -> A.assertStatus(res, code)
+- Contains -> A.assertContains(res, 'text')
+- JsonPath Match -> A.assertJsonPathDeep(res, 'dot.path', value)  (preserve value TYPE exactly)
+- JsonPath Existence -> A.assertJsonPathExists(res, 'key')
+- Header -> A.assertHeader(res, 'name', 'value')
+
+## Groovy assertions (your judgement matters most here)
+Read the Groovy, rewrite as the simplest equivalent expect()/helper. Add a one-line comment of what it originally asserted. If you cannot confidently translate it, leave // REVIEW: instead of guessing.
+
+## How you work
+1. Inventory every TODO/GROOVY/MANUAL marker before editing.
+2. Resolve one file at a time.
+3. Never invent endpoints, fields, status codes, or values. An assertion that passes for the wrong reason is worse than one that fails - flag it.
+4. End by listing every // REVIEW: you left.
+
+## Never
+- Disable TLS, weaken auth, or hardcode secrets to make something pass.
+- Mark a file done if it still contains guesses.</script>
+
+<script type="text/plain" id="src-readme"># SuiteShift - ReadyAPI to Playwright toolkit
+
+Two tools that work together. The script does the reliable mechanical bulk; the Copilot agent handles the judgement calls.
+
+## 1. Run the script
+    npm install fast-xml-parser
+    node scripts/migrate.mjs ./ReadyAPI-Project.xml
+Writes generated/src/tests/*.spec.ts and generated/.env.generated.
+
+## 2. Add the agent
+Copy readyapi-migrator.agent.md into .github/agents/. It appears in the Copilot
+agent picker (Business/Enterprise). On Individual/Pro it still works as a strong
+instructions file.
+
+## 3. Resolve the flags
+Open a generated file and ask @readyapi-migrator to resolve the TODO and GROOVY
+markers - one file at a time. It flags anything uncertain with // REVIEW:.
+
+## 4. Wire auth + run
+Create the auth fixture (bearerToken) with your OAuth2 grant, fill .env secrets,
+then: npx playwright test --reporter=list
+
+## Why split this way
+At 1,000 steps a fully autonomous agent would quietly get some conversions wrong
+and you'd have to check all of them. The deterministic script gives a trustworthy
+baseline; the agent only touches what needs a brain.</script>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const xmlIn = $('#xmlIn'), tabs = $('#tabs'), codeOut = $('#codeOut'),
+        outEmpty = $('#outEmpty'), summary = $('#summary'),
+        zipBtn = $('#zipBtn'), fileBtn = $('#fileBtn'), copyBtn = $('#copyBtn'),
+        convertBtn = $('#convertBtn');
+  let files = [], active = 0;
+
+  function toast(msg, ok){
+    const t = $('#toast');
+    t.innerHTML = (ok ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-info" style="color:#7d8699"></i>') + '<span>' + msg + '</span>';
+    t.classList.add('show');
+    clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2000);
+  }
+  function decode(html){ const d = document.createElement('textarea'); d.innerHTML = html; return d.value; }
+  function getEmbedded(id){ return decode(document.getElementById(id).innerHTML); }
+
+  function download(name, text){
+    const blob = new Blob([text], {type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function els(parent, localName){
+    return Array.from(parent.getElementsByTagName('*')).filter(e => e.localName === localName);
+  }
+  function first(parent, localName){ return els(parent, localName)[0] || null; }
+  function confText(a, name){ const e = first(a, name); return e ? e.textContent.trim() : ''; }
+  const sanitize = s => (s || 'unnamed').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+
+  function convert(xml){
+    const dom = new DOMParser().parseFromString(xml, 'application/xml');
+    if (dom.getElementsByTagName('parsererror').length)
+      throw new Error('That XML could not be parsed. Copy the full ReadyAPI export.');
+    const project = els(dom, 'soapui-project')[0];
+    if (!project) throw new Error('No <con:soapui-project> root found. Is this a ReadyAPI export?');
+
+    const env = {};
+    els(dom, 'property').forEach(p => {
+      const n = first(p,'name'), v = first(p,'value');
+      if (n && n.textContent.trim()) env[n.textContent.trim()] = v ? v.textContent.trim() : '';
+    });
+
+    const out = [];
+    let stats = { suites:0, cases:0, steps:0, asserts:0, flags:0 };
+
+    els(project, 'testSuite').forEach(suite => {
+      stats.suites++;
+      const sName = suite.getAttribute('name') || 'Suite';
+      const L = [
+        "import { test, expect } from '../fixtures/auth.fixture';",
+        "import { ApiClient } from '../helpers/apiClient';",
+        "import * as A from '../assertions/assertHelpers';",
+        '',
+        'test.describe(' + JSON.stringify(sName) + ', () => {'
+      ];
+      els(suite, 'testCase').forEach(tc => {
+        stats.cases++;
+        L.push('', '  test(' + JSON.stringify(tc.getAttribute('name') || 'Case') + ', async ({ request, bearerToken }) => {');
+        L.push('    const api = new ApiClient(request, bearerToken);');
+        L.push('    const ctx = {};');
+        els(tc, 'testStep').forEach(step => {
+          stats.steps++;
+          const name = step.getAttribute('name') || 'step';
+          const type = step.getAttribute('type') || '';
+          if (type === 'restrequest' || type === 'httprequest'){
+            const cfg = first(step, 'config') || step;
+            const method = (cfg.getAttribute('method') || step.getAttribute('method') || 'GET').toLowerCase();
+            const path = cfg.getAttribute('resourcePath') || step.getAttribute('resourcePath') || '/';
+            const reqEl = first(step, 'request');
+            const body = reqEl ? reqEl.textContent.trim() : '';
+            L.push('', '    await test.step(' + JSON.stringify(name) + ', async () => {');
+            L.push('      const res = await api.' + method + '(`' + path + '`' + (body ? ', ' + JSON.stringify(body) : '') + ');');
+            const asserts = els(step, 'assertion');
+            if (!asserts.length){ L.push('      await A.assertStatus(res, 200); // TODO confirm expected status'); stats.flags++; }
+            asserts.forEach(a => {
+              stats.asserts++;
+              const at = a.getAttribute('type') || '';
+              if (at.indexOf('Valid HTTP Status') > -1){
+                const codes = (confText(a,'codes') || '200').split(/[\s,]+/)[0];
+                L.push('      await A.assertStatus(res, ' + codes + ');');
+              } else if (at.indexOf('JsonPath Match') > -1){
+                const p = confText(a,'path') || confText(a,'expression');
+                const v = confText(a,'content') || confText(a,'expectedContent');
+                L.push('      // TODO JsonPath: ' + p + ' == ' + JSON.stringify(v));
+                L.push('      // await A.assertJsonPathDeep(res, \'<dot.path>\', ' + JSON.stringify(v) + ');');
+                stats.flags++;
+              } else if (at.indexOf('JsonPath Existence') > -1){
+                L.push('      // TODO JsonPath exists: ' + (confText(a,'path') || confText(a,'expression')));
+                L.push('      // await A.assertJsonPathExists(res, \'<key>\');');
+                stats.flags++;
+              } else if (at.indexOf('Contains') > -1){
+                L.push('      await A.assertContains(res, ' + JSON.stringify(confText(a,'token')) + ');');
+              } else if (at.indexOf('Script') > -1){
+                L.push('      // GROOVY SCRIPT - convert by hand or with the Copilot agent:');
+                (confText(a,'script') || '').split('\n').forEach(s => L.push('      //   ' + s));
+                stats.flags++;
+              } else {
+                L.push('      // Assertion "' + at + '" - review manually'); stats.flags++;
+              }
+            });
+            L.push('    });');
+          } else if (type === 'transfer' || type === 'properties'){
+            L.push('    // PROPERTY TRANSFER "' + name + '" - assign the transferred value here');
+            L.push('    // TODO: ctx.value = (await res.json()).<path>;');
+            stats.flags++;
+          } else {
+            L.push('    // Step "' + name + '" (' + type + ') - needs manual migration'); stats.flags++;
+          }
+        });
+        L.push('  });');
+      });
+      L.push('});', '');
+      out.push({ name: 'src/tests/' + sanitize(sName) + '.spec.ts', body: L.join('\n') });
+    });
+
+    if (!out.length) throw new Error('No test suites found in this export.');
+    const envBody = Object.entries(env).map(([k,v]) => sanitize(k).toUpperCase() + '=' + v).join('\n');
+    out.push({ name: '.env.generated', body: (envBody || '# no properties found') + '\n' });
+    return { files: out, stats };
+  }
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function highlight(code){
+    return esc(code).split('\n').map(line => {
+      if (/^\s*\/\//.test(line)){
+        const cls = /TODO|GROOVY|REVIEW|manual/.test(line) ? 'c-todo' : 'c-com';
+        return '<span class="'+cls+'">'+line+'</span>';
+      }
+      return line
+        .replace(/&#39;[^&]*?&#39;|&quot;[^&]*?&quot;|`[^`]*?`/g, m => '<span class="c-str">'+m+'</span>')
+        .replace(/\b(import|from|const|await|async|test|expect)\b/g, '<span class="c-key">$1</span>')
+        .replace(/\b(describe|step|assertStatus|assertContains|assertJsonPathDeep|assertJsonPathExists|assertHeader)\b/g, '<span class="c-fn">$1</span>');
+    }).join('\n');
+  }
+
+  const fileIcon = n => n.endsWith('.spec.ts') ? 'fa-flask-vial' : 'fa-gear';
+  function renderTabs(){
+    tabs.innerHTML = '';
+    files.forEach((f, i) => {
+      const b = document.createElement('button');
+      b.className = 'tab' + (i === active ? ' active' : '');
+      b.innerHTML = '<i class="fa-solid ' + fileIcon(f.name) + '"></i>' + f.name.split('/').pop();
+      b.onclick = () => { active = i; show(); };
+      tabs.appendChild(b);
+    });
+  }
+  function show(){
+    renderTabs();
+    codeOut.innerHTML = highlight(files[active].body);
+    tabs.classList.remove('hidden'); codeOut.classList.remove('hidden'); outEmpty.classList.add('hidden');
+    zipBtn.disabled = false; fileBtn.disabled = false;
+  }
+  function renderSummary(s){
+    summary.innerHTML = '';
+    const chips = [
+      ['vio','fa-layer-group', s.suites, s.suites===1?'suite':'suites'],
+      ['vio','fa-vials', s.cases, s.cases===1?'test case':'test cases'],
+      ['gray','fa-list-ol', s.steps, 'steps'],
+      ['good','fa-circle-check', s.asserts, 'assertions mapped'],
+      ['warn','fa-flag', s.flags, 'flagged for review']
+    ];
+    chips.forEach(([cls,ic,n,l]) => {
+      const c = document.createElement('div'); c.className = 'chip ' + cls;
+      c.innerHTML = '<span class="ic"><i class="fa-solid '+ic+'"></i></span><span class="tx"><span class="n">'+n+'</span><span class="l">'+l+'</span></span>';
+      summary.appendChild(c);
+    });
+    summary.classList.remove('hidden');
+  }
+
+  function run(){
+    const xml = xmlIn.value.trim();
+    if (!xml){ toast('Paste your ReadyAPI XML first'); return; }
+    convertBtn.classList.add('busy'); convertBtn.innerHTML = '<i class="fa-solid fa-spinner"></i>';
+    setTimeout(() => {
+      try {
+        const res = convert(xml);
+        files = res.files; active = 0;
+        show(); renderSummary(res.stats);
+        toast('Converted ' + res.stats.suites + ' suite' + (res.stats.suites>1?'s':'') + ' · ' + res.stats.steps + ' steps', true);
+      } catch(e){ toast(e.message); }
+      convertBtn.classList.remove('busy'); convertBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    }, 280);
+  }
+
+  convertBtn.onclick = run;
+  $('#sampleBtn').onclick = () => { xmlIn.value = getEmbedded('src-sample'); toast('Sample loaded — press the convert button', true); };
+  copyBtn.onclick = () => {
+    if (!files.length){ toast('Nothing to copy yet'); return; }
+    navigator.clipboard.writeText(files[active].body).then(()=>toast('Copied ' + files[active].name.split('/').pop(), true));
+  };
+  fileBtn.onclick = () => { if (files.length) download(files[active].name.split('/').pop(), files[active].body); };
+  zipBtn.onclick = async () => {
+    if (!files.length || typeof JSZip === 'undefined'){ toast('Nothing to zip yet'); return; }
+    const zip = new JSZip();
+    files.forEach(f => zip.file(f.name, f.body));
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'playwright-tests.zip'; document.body.appendChild(a); a.click(); a.remove();
+    toast('Downloaded playwright-tests.zip', true);
+  };
+
+  const kitMap = {
+    migrate: ['migrate.mjs', 'src-migrate'],
+    agent:   ['readyapi-migrator.agent.md', 'src-agent'],
+    readme:  ['README.md', 'src-readme']
+  };
+  document.querySelectorAll('.dlbtn').forEach(btn => {
+    btn.onclick = () => { const [name, id] = kitMap[btn.dataset.file]; download(name, getEmbedded(id)); toast('Downloaded ' + name, true); };
+  });
+
+  xmlIn.addEventListener('keydown', e => { if ((e.metaKey||e.ctrlKey) && e.key === 'Enter') run(); });
+})();
+</script>
+</body>
+</html>
